@@ -4,7 +4,7 @@ import numpy as np
 from scipy.stats import norm
 
 # --- PARÁMETROS FIJOS (DEL PROFESOR) ---
-# μ: Media poblacional secreta que intentamos capturar
+# μ: Media poblacional secreta que intentamos capturar.
 MU_POBLACIONAL = 100.0
 # σ: Desviación Estándar poblacional (conocida) que usaremos
 SIGMA_POBLACIONAL = 3.0
@@ -205,4 +205,5 @@ else:
     )
     
     # Mostrar el gráfico en Streamlit
+
     st.plotly_chart(fig, use_container_width=True)
