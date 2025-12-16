@@ -98,30 +98,15 @@ if boton_enviar:
             datos_limpios = datos_input.replace(',', ' ').split()
             datos_numericos = [float(d) for d in datos_limpios]
             
-            # Validación de tamaño
-            if len(datos_numericos) != TAMANO_MUESTRA:
-                st.error(f"Se esperaba exactamente {TAMANO_MUESTRA} datos, pero ingresaste {len(datos_numericos)}.")
-            else:
-                # --- LÓGICA DE PROCESAMIENTO AL PRESIONAR EL BOTÓN ---
-
-if boton_enviar:
-    # a. Validación y Limpieza de Datos
-    if not id_estudiante or not datos_input:
-        st.error("Por favor, ingresa tu ID/Nombre y los datos de la muestra.")
-    else:
-        try:
-            datos_limpios = datos_input.replace(',', ' ').split()
-            datos_numericos = [float(d) for d in datos_limpios]
-            
-            # Validación de tamaño
+            # 1. Validación de tamaño
             if len(datos_numericos) != TAMANO_MUESTRA:
                 st.error(f"Se esperaba exactamente {TAMANO_MUESTRA} datos, pero ingresaste {len(datos_numericos)}.")
             
-            # >>>>>>> NUEVA VALIDACIÓN: RANGO DE DATOS <<<<<<<<
+            # 2. Validación de Rango de Datos
             elif not all(MIN_DATO_PERMITIDO <= x <= MAX_DATO_PERMITIDO for x in datos_numericos):
                 st.error(f"ERROR: Al menos un dato está fuera del rango permitido. Los datos deben estar entre {MIN_DATO_PERMITIDO} y {MAX_DATO_PERMITIDO}.")
-            # >>>>>>> FIN NUEVA VALIDACIÓN <<<<<<<<
             
+            # 3. Si todas las validaciones pasan
             else:
                 # b. Cálculos
                 media_muestral = np.mean(datos_numericos)
@@ -135,7 +120,20 @@ if boton_enviar:
                 st.markdown(f"**¿Captura μ={MU_POBLACIONAL}?** **{captura}**")
                 
                 # d. Almacenar el resultado en el repositorio
-                # ... (El código de almacenamiento sigue igual) ...
+                nuevo_resultado = pd.DataFrame([{
+                    'ID_Estudiante': id_estudiante,
+                    'Nivel_Confianza': f"{nc_seleccionado}%",
+                    'Media_Muestral': media_muestral,
+                    'Margen_Error': margen_error,
+                    'LI': li,
+                    'LS': ls,
+                    'Captura_Mu': captura
+                }])
+                
+                st.session_state.resultados_df = pd.concat(
+                    [st.session_state.resultados_df, nuevo_resultado], 
+                    ignore_index=True
+                )
         
         except ValueError:
             st.error("Asegúrate de que todos los datos ingresados sean números válidos.")
