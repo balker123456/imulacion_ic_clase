@@ -4,12 +4,17 @@ import numpy as np
 from scipy.stats import norm
 
 # --- PARÁMETROS FIJOS (DEL PROFESOR) ---
-# μ: Media poblacional secreta que intentamos capturar.
+# μ: Media poblacional secreta que intentamos capturar
 MU_POBLACIONAL = 100.0
 # σ: Desviación Estándar poblacional (conocida) que usaremos
 SIGMA_POBLACIONAL = 3.0
 # n: Tamaño de la muestra
 TAMANO_MUESTRA = 30
+# --- PARÁMETROS DE VALIDACIÓN (NUEVOS) ---
+# Rango mínimo y máximo para los datos de la muestra (para evitar errores extremos)
+MIN_DATO_PERMITIDO = 90.0
+MAX_DATO_PERMITIDO = 110.0
+
 # Columnas para el repositorio de resultados
 COLUMNAS = ['ID_Estudiante', 'Nivel_Confianza', 'Media_Muestral', 
             'Margen_Error', 'LI', 'LS', 'Captura_Mu']
@@ -97,6 +102,27 @@ if boton_enviar:
             if len(datos_numericos) != TAMANO_MUESTRA:
                 st.error(f"Se esperaba exactamente {TAMANO_MUESTRA} datos, pero ingresaste {len(datos_numericos)}.")
             else:
+                # --- LÓGICA DE PROCESAMIENTO AL PRESIONAR EL BOTÓN ---
+
+if boton_enviar:
+    # a. Validación y Limpieza de Datos
+    if not id_estudiante or not datos_input:
+        st.error("Por favor, ingresa tu ID/Nombre y los datos de la muestra.")
+    else:
+        try:
+            datos_limpios = datos_input.replace(',', ' ').split()
+            datos_numericos = [float(d) for d in datos_limpios]
+            
+            # Validación de tamaño
+            if len(datos_numericos) != TAMANO_MUESTRA:
+                st.error(f"Se esperaba exactamente {TAMANO_MUESTRA} datos, pero ingresaste {len(datos_numericos)}.")
+            
+            # >>>>>>> NUEVA VALIDACIÓN: RANGO DE DATOS <<<<<<<<
+            elif not all(MIN_DATO_PERMITIDO <= x <= MAX_DATO_PERMITIDO for x in datos_numericos):
+                st.error(f"ERROR: Al menos un dato está fuera del rango permitido. Los datos deben estar entre {MIN_DATO_PERMITIDO} y {MAX_DATO_PERMITIDO}.")
+            # >>>>>>> FIN NUEVA VALIDACIÓN <<<<<<<<
+            
+            else:
                 # b. Cálculos
                 media_muestral = np.mean(datos_numericos)
                 margen_error, li, ls, captura = calcular_ic(media_muestral, nc_seleccionado)
@@ -109,20 +135,7 @@ if boton_enviar:
                 st.markdown(f"**¿Captura μ={MU_POBLACIONAL}?** **{captura}**")
                 
                 # d. Almacenar el resultado en el repositorio
-                nuevo_resultado = pd.DataFrame([{
-                    'ID_Estudiante': id_estudiante,
-                    'Nivel_Confianza': f"{nc_seleccionado}%",
-                    'Media_Muestral': media_muestral,
-                    'Margen_Error': margen_error,
-                    'LI': li,
-                    'LS': ls,
-                    'Captura_Mu': captura
-                }])
-                
-                st.session_state.resultados_df = pd.concat(
-                    [st.session_state.resultados_df, nuevo_resultado], 
-                    ignore_index=True
-                )
+                # ... (El código de almacenamiento sigue igual) ...
         
         except ValueError:
             st.error("Asegúrate de que todos los datos ingresados sean números válidos.")
@@ -205,5 +218,4 @@ else:
     )
     
     # Mostrar el gráfico en Streamlit
-
     st.plotly_chart(fig, use_container_width=True)
