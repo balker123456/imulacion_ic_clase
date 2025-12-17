@@ -66,7 +66,7 @@ with st.sidebar:
     nc_seleccionado = st.selectbox(
         "Nivel de Confianza (1 - α)",
         options=[90, 95, 99],
-        index=1, 
+        index=0, 
         help="El porcentaje de veces que el método debe capturar la media poblacional (μ)."
     )
 
@@ -203,7 +203,7 @@ else:
     
     # C. Configuración del diseño del gráfico
     fig.update_layout(
-        title="Visualización de Intervalos de Confianza (95% Cobertura)",
+        title="Visualización de Intervalos de Confianza (90% Cobertura)",
         xaxis_title=f"Valor de la Media (μ={MU_POBLACIONAL})",
         yaxis_title="Muestra",
         yaxis=dict(
