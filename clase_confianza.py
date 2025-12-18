@@ -2,56 +2,36 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from scipy.stats import norm
+from streamlit_gsheets import GSheetsConnection
+
+# --- CONFIGURACIÓN DE LA PLANILLA (BASE DE DATOS) ---
+# Asegúrate de que la planilla tenga acceso de "Editor" para cualquier persona con el enlace.
+URL_PLANILLA = "https://docs.google.com/spreadsheets/d/1ClW79PcyF7cUvkR_8H0aSZNlHiQWM_KU6LoXUTQMDEY/edit?usp=sharing"
+
+# Crear la conexión
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- PARÁMETROS FIJOS (DEL PROFESOR) ---
-# μ: Media poblacional secreta que intentamos capturar
 MU_POBLACIONAL = 100.0
-# σ: Desviación Estándar poblacional (conocida) que usaremos
 SIGMA_POBLACIONAL = 3.0
-# n: Tamaño de la muestra
 TAMANO_MUESTRA = 30
-# --- PARÁMETROS DE VALIDACIÓN (NUEVOS) ---
-# Rango mínimo y máximo para los datos de la muestra (para evitar errores extremos)
 MIN_DATO_PERMITIDO = 90.0
 MAX_DATO_PERMITIDO = 110.0
 
-# Columnas para el repositorio de resultados
-COLUMNAS = ['ID_Estudiante', 'Nivel_Confianza', 'Media_Muestral', 
-            'Margen_Error', 'LI', 'LS', 'Captura_Mu']
-
-# Inicializa el repositorio de resultados en el estado de la sesión
-if 'resultados_df' not in st.session_state:
-    st.session_state.resultados_df = pd.DataFrame(columns=COLUMNAS)
-
 # --- FUNCIÓN DE CÁLCULO DE INTERVALO DE CONFIANZA ---
 def calcular_ic(media_muestral, nc_porcentaje):
-    """Calcula el IC al Z con sigma conocido."""
-    
-    # 1. Convertir el nivel de confianza a decimal (ej: 95 -> 0.95)
     nc = nc_porcentaje / 100.0
-    
-    # 2. Calcular el valor crítico Z_alpha/2 (función INV.NORM.ESTAND)
     probabilidad_acumulada = 1 - (1 - nc) / 2
     z_critico = norm.ppf(probabilidad_acumulada) 
-    
-    # 3. Calcular el error estándar
     error_estandar = SIGMA_POBLACIONAL / np.sqrt(TAMANO_MUESTRA)
-    
-    # 4. Calcular el Margen de Error (E)
     margen_error = z_critico * error_estandar
-    
-    # 5. Calcular los límites del intervalo
     li = media_muestral - margen_error
     ls = media_muestral + margen_error
-    
-    # 6. Verificar si captura la media poblacional (μ=100)
     captura = 'SÍ' if (li <= MU_POBLACIONAL <= ls) else 'NO'
-    
     return margen_error, li, ls, captura
 
 # --- INTERFAZ DE STREAMLIT ---
-
-st.set_page_config(layout="wide") 
+st.set_page_config(layout="wide", page_title="Simulación IC - Clase") 
 st.title("📊 Simulación Interactiva: Intervalos de Confianza")
 st.markdown("---")
 
@@ -62,64 +42,52 @@ with st.sidebar:
     st.info(f"**Desviación Estándar (σ):** {SIGMA_POBLACIONAL}")
     st.info(f"**Tamaño de Muestra (n):** {TAMANO_MUESTRA}")
     
-    # Selector de Nivel de Confianza
     nc_seleccionado = st.selectbox(
         "Nivel de Confianza (1 - α)",
         options=[90, 95, 99],
         index=0, 
-        help="El porcentaje de veces que el método debe capturar la media poblacional (μ)."
+        help="90% significa que esperamos que 1 de cada 10 intervalos falle."
     )
 
 # 2. Área de Entrada de Datos del Estudiante
 st.header("Entrada de Datos del Estudiante")
-col1, col2 = st.columns([1, 3])
+col_id, col_txt = st.columns([1, 3])
 
-with col1:
-    id_estudiante = st.text_input("Ingresa tu Nombre / ID de Muestra:", key="id_input")
+with col_id:
+    id_estudiante = st.text_input("Tu Nombre / ID de Muestra:", key="id_input")
 
-with col2:
+with col_txt:
     datos_input = st.text_area(
-        "Pega aquí los 30 datos de tu muestra (separados por comas o espacios):",
+        "Pega los 30 datos de tu muestra (separados por comas o espacios):",
         height=100,
         key="datos_input"
     )
 
-# 3. Botón de Ejecución del Cálculo
 boton_enviar = st.button("Calcular IC y Enviar Resultados", type="primary")
 
-# --- LÓGICA DE PROCESAMIENTO AL PRESIONAR EL BOTÓN ---
-
+# --- LÓGICA DE PROCESAMIENTO ---
 if boton_enviar:
-    # a. Validación y Limpieza de Datos
     if not id_estudiante or not datos_input:
-        st.error("Por favor, ingresa tu ID/Nombre y los datos de la muestra.")
+        st.error("Por favor, ingresa tu ID y los datos.")
     else:
         try:
             datos_limpios = datos_input.replace(',', ' ').split()
             datos_numericos = [float(d) for d in datos_limpios]
             
-            # 1. Validación de tamaño
             if len(datos_numericos) != TAMANO_MUESTRA:
-                st.error(f"Se esperaba exactamente {TAMANO_MUESTRA} datos, pero ingresaste {len(datos_numericos)}.")
-            
-            # 2. Validación de Rango de Datos
+                st.error(f"Se esperaba exactamente {TAMANO_MUESTRA} datos.")
             elif not all(MIN_DATO_PERMITIDO <= x <= MAX_DATO_PERMITIDO for x in datos_numericos):
-                st.error(f"ERROR: Al menos un dato está fuera del rango permitido. Los datos deben estar entre {MIN_DATO_PERMITIDO} y {MAX_DATO_PERMITIDO}.")
-            
-            # 3. Si todas las validaciones pasan
+                st.error(f"Error: Datos fuera de rango ({MIN_DATO_PERMITIDO} - {MAX_DATO_PERMITIDO}).")
             else:
-                # b. Cálculos
+                # Cálculos
                 media_muestral = np.mean(datos_numericos)
                 margen_error, li, ls, captura = calcular_ic(media_muestral, nc_seleccionado)
 
-                # c. Mostrar Resultados Individuales
-                st.success(f"Cálculo completado para {id_estudiante} al {nc_seleccionado}%.")
-                st.markdown(f"**Media Muestral (x̄):** `{media_muestral:.3f}`")
-                st.markdown(f"**Margen de Error (E):** `{margen_error:.3f}`")
-                st.markdown(f"**Intervalo de Confianza:** `{li:.3f}` a `{ls:.3f}`")
-                st.markdown(f"**¿Captura μ={MU_POBLACIONAL}?** **{captura}**")
+                # Mostrar Resultados Individuales
+                st.success(f"Cálculo completado para {id_estudiante}")
+                st.markdown(f"**Media (x̄):** `{media_muestral:.3f}` | **IC:** `{li:.3f}` a `{ls:.3f}` | **Captura:** **{captura}**")
                 
-                # d. Almacenar el resultado en el repositorio
+                # Enviar a Google Sheets
                 nuevo_resultado = pd.DataFrame([{
                     'ID_Estudiante': id_estudiante,
                     'Nivel_Confianza': f"{nc_seleccionado}%",
@@ -130,90 +98,61 @@ if boton_enviar:
                     'Captura_Mu': captura
                 }])
                 
-                st.session_state.resultados_df = pd.concat(
-                    [st.session_state.resultados_df, nuevo_resultado], 
-                    ignore_index=True
-                )
+                df_existente = conn.read(spreadsheet=URL_PLANILLA, ttl=0)
+                df_actualizado = pd.concat([df_existente, nuevo_resultado], ignore_index=True)
+                conn.update(spreadsheet=URL_PLANILLA, data=df_actualizado)
+                st.balloons()
         
         except ValueError:
-            st.error("Asegúrate de que todos los datos ingresados sean números válidos.")
+            st.error("Asegúrate de que todos los datos sean números válidos.")
 
-            # --- VISUALIZACIÓN DE RESULTADOS ---
+# --- FASE III: VISUALIZACIÓN DE RESULTADOS ---
 st.markdown("---")
-st.header("📈 Resultados de la Clase (Repositorio)")
+st.header("📈 Resultados de la Clase (En Tiempo Real)")
 
-resultados_df = st.session_state.resultados_df
+if st.button('🔄 Actualizar Pizarra de la Clase'):
+    st.cache_data.clear()
+    st.rerun()
 
-if resultados_df.empty:
-    st.warning("Aún no hay resultados para mostrar. ¡Ingresa tu primera muestra!")
-else:
-    # 1. Mostrar la tabla de resultados
-    st.subheader("Tabla de Medias e Intervalos de la Clase")
-    st.dataframe(resultados_df, use_container_width=True)
+try:
+    resultados_df = conn.read(spreadsheet=URL_PLANILLA, ttl=0)
+    resultados_df = resultados_df.dropna(subset=['ID_Estudiante'])
 
-    # 2. Resumen de Éxito vs. Fracaso
-    conteo = resultados_df['Captura_Mu'].value_counts().reindex(['SÍ', 'NO'], fill_value=0)
-    
-    col_conteo_1, col_conteo_2 = st.columns(2)
-    with col_conteo_1:
-        st.metric(
-            label="Intervalos Exitosos (Capturan μ)",
-            value=f"{conteo['SÍ']} de {len(resultados_df)}"
-        )
-    with col_conteo_2:
-        # Calcular el porcentaje de error (alpha)
-        porcentaje_error = (conteo['NO'] / len(resultados_df)) * 100
-        st.metric(
-            label="Intervalos Fallidos (Tasa de Error)",
-            value=f"{conteo['NO']} de {len(resultados_df)}",
-            delta=f"{porcentaje_error:.1f}% de α (Esperado 5%)"
-        )
+    if resultados_df.empty:
+        st.warning("Esperando los primeros resultados de la clase...")
+    else:
+        # Métricas
+        conteo = resultados_df['Captura_Mu'].value_counts().reindex(['SÍ', 'NO'], fill_value=0)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total Muestras", len(resultados_df))
+        c2.metric("Capturaron μ", f"{conteo['SÍ']}")
+        c3.metric("Fuera de Rango", f"{conteo['NO']}", delta_color="inverse")
 
+        # Gráfico 1: Histograma
+        import plotly.express as px
+        st.subheader("1. Distribución de Medias (Teorema Límite Central)")
+        fig_hist = px.histogram(resultados_df, x='Media_Muestral', nbins=10, 
+                               title='¿Cómo se agrupan las medias de los alumnos?',
+                               color_discrete_sequence=['#636EFA'], opacity=0.7)
+        fig_hist.add_vline(x=MU_POBLACIONAL, line_dash="dash", line_color="green", annotation_text="μ real")
+        st.plotly_chart(fig_hist, use_container_width=True)
 
-    # 3. Generación del Gráfico de Cobertura con Plotly
-    import plotly.graph_objects as go
-    
-    # Crear la columna de 'ID_Muestra' para el eje Y
-    resultados_df['ID_Muestra'] = resultados_df.index + 1
-    
-    # Columna para pintar los fallos de rojo
-    color_map = {'SÍ': 'blue', 'NO': 'red'}
-    
-    fig = go.Figure()
-    
-    # A. Agregar los intervalos de confianza (lineas horizontales)
-    for index, row in resultados_df.iterrows():
-        fig.add_trace(go.Scatter(
-            x=[row['LI'], row['LS']],
-            y=[row['ID_Muestra'], row['ID_Muestra']],
-            mode='lines',
-            line=dict(color=color_map[row['Captura_Mu']], width=3),
-            name=f"IC Muestra {row['ID_Muestra']}",
-            hoverinfo='text',
-            hovertext=f"ID: {row['ID_Estudiante']}<br>IC: [{row['LI']:.3f}, {row['LS']:.3f}]<br>Media: {row['Media_Muestral']:.3f}<br>Captura μ: {row['Captura_Mu']}",
-            showlegend=False
-        ))
-        
-    # B. Agregar la línea vertical de la media poblacional (μ)
-    fig.add_shape(type="line",
-        x0=MU_POBLACIONAL, y0=0, x1=MU_POBLACIONAL, y1=len(resultados_df) + 1,
-        line=dict(color="green", width=2, dash="dash"),
-        name=f"μ={MU_POBLACIONAL}"
-    )
-    
-    # C. Configuración del diseño del gráfico
-    fig.update_layout(
-        title="Visualización de Intervalos de Confianza (90% Cobertura)",
-        xaxis_title=f"Valor de la Media (μ={MU_POBLACIONAL})",
-        yaxis_title="Muestra",
-        yaxis=dict(
-            tickmode='array',
-            tickvals=resultados_df['ID_Muestra'],
-            ticktext=[f"Muestra {i}" for i in resultados_df['ID_Muestra']],
-            autorange="reversed" 
-        ),
-        height=min(800, 100 + 40 * len(resultados_df)) 
-    )
-    
-    # Mostrar el gráfico en Streamlit
-    st.plotly_chart(fig, use_container_width=True)
+        # Gráfico 2: Cobertura
+        import plotly.graph_objects as go
+        st.subheader("2. Cobertura de Intervalos")
+        resultados_df['ID_Muestra'] = range(1, len(resultados_df) + 1)
+        fig_cob = go.Figure()
+
+        for _, row in resultados_df.iterrows():
+            color = '#00CC96' if row['Captura_Mu'] == 'SÍ' else '#EF553B'
+            fig_cob.add_trace(go.Scatter(
+                x=[row['LI'], row['LS']], y=[row['ID_Muestra'], row['ID_Muestra']],
+                mode='lines+markers', line=dict(color=color, width=3), showlegend=False
+            ))
+
+        fig_cob.add_vline(x=MU_POBLACIONAL, line_width=2, line_dash="dash", line_color="green")
+        fig_cob.update_layout(xaxis_title="Valor", yaxis_title="Estudiante", height=400)
+        st.plotly_chart(fig_cob, use_container_width=True)
+
+except Exception as e:
+    st.error(f"Esperando conexión con la base de datos...")
